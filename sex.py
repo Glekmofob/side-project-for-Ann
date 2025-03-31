@@ -1,51 +1,67 @@
 import streamlit as st
+from datetime import date
+import json
 from pathlib import Path
+import os
 
 # Настройка страницы
 st.set_page_config(
-    page_title="Заметки Ани и Гриши",
+    page_title="Ежедневные заметки Ани и Гриши",
     layout="wide"
 )
 
-# Функция для загрузки и сохранения текста
-def load_text(filename):
+# Функции для работы с данными
+def get_data_path(user, selected_date):
+    """Возвращает путь к файлу с заметками для указанного пользователя и даты"""
+    return f"notes/{user}/{selected_date}.json"
+
+def load_notes(user, selected_date):
+    """Загружает заметки для указанного пользователя и даты"""
+    path = get_data_path(user, selected_date)
     try:
-        with open(filename, "r", encoding="utf-8") as file:
-            return file.read()
-    except FileNotFoundError:
+        with open(path, "r", encoding="utf-8") as file:
+            return json.load(file).get("notes", "")
+    except (FileNotFoundError, json.JSONDecodeError):
         return ""
 
-def save_text(filename, text):
-    with open(filename, "w", encoding="utf-8") as file:
-        file.write(text)
+def save_notes(user, selected_date, notes):
+    """Сохраняет заметки для указанного пользователя и даты"""
+    Path(f"notes/{user}").mkdir(parents=True, exist_ok=True)
+    path = get_data_path(user, selected_date)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump({"date": str(selected_date), "notes": notes}, file, ensure_ascii=False)
 
-# Создаем файлы, если их нет
-Path("ani_notes.txt").touch(exist_ok=True)
-Path("grisha_notes.txt").touch(exist_ok=True)
+def init_storage():
+    """Инициализирует хранилище данных"""
+    os.makedirs("notes/Аня", exist_ok=True)
+    os.makedirs("notes/Гриша", exist_ok=True)
 
-# Заголовок приложения
-st.title("Совместные заметки Ани и Гриши 📝")
+# Инициализация хранилища
+init_storage()
 
-# Создаем две колонки
-col1, col2 = st.columns(2)
+# Боковое меню для выбора страницы
+page = st.sidebar.radio("Выберите страницу:", ("Аня", "Гриша"))
 
-# Колонка Ани
-with col1:
-    st.header("Заметки Ани")
-    ani_text = load_text("ani_notes.txt")
-    edited_ani = st.text_area("Редактируйте заметки Ани:", ani_text, height=300, key="ani_text_area")
-    if st.button("Сохранить заметки Ани", key="ani_save"):
-        save_text("ani_notes.txt", edited_ani)
-        st.success("Заметки Ани сохранены!")
+# Выбор даты в календаре
+selected_date = st.sidebar.date_input(
+    "Выберите дату:",
+    date.today(),
+    min_value=date(2020, 1, 1),
+    max_value=date(2030, 12, 31)
+)
 
-# Колонка Гриши
-with col2:
-    st.header("Заметки Гриши")
-    grisha_text = load_text("grisha_notes.txt")
-    edited_grisha = st.text_area("Редактируйте заметки Гриши:", grisha_text, height=300, key="grisha_text_area")
-    if st.button("Сохранить заметки Гриши", key="grisha_save"):
-        save_text("grisha_notes.txt", edited_grisha)
-        st.success("Заметки Гриши сохранены!")
+# Заголовок с указанием даты
+st.title(f"Заметки {page} на {selected_date.strftime('%d.%m.%Y')}")
 
-# Добавляем разделитель для визуального разделения
-st.markdown("---")
+# Основное содержимое страницы
+notes = load_notes(page, selected_date)
+edited_notes = st.text_area(
+    "Редактируйте свои заметки:",
+    notes,
+    height=400,
+    key=f"editor_{page}_{selected_date}"
+)
+
+if st.button(f"Сохранить заметки ({page})"):
+    save_notes(page, selected_date, edited_notes)
+    st.success("Заметки успешно сохранены!")
